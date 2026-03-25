@@ -90,10 +90,13 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--profile",
-        action="store_true",
-        help="Enable PyTorch profiler to capture execution trace",
+        "--attention-backend",
+        type=str,
+        default="auto",
+        help="Attention backend (supports hybrid prefill/decode split, e.g., fa,fi) (default: auto)",
     )
+
+    parser.add_argument("--profile", action="store_true", help="Enable PyTorch profiler")
 
     parser.add_argument(
         "--profile-output",
@@ -131,6 +134,7 @@ def main():
         cuda_graph_max_bs=args.cuda_graph_max_bs,
         page_size=args.page_size,
         use_dummy_weight=args.use_dummy_weight,
+        attention_backend=args.attention_backend,
     )
 
     prompt_token_ids = [
