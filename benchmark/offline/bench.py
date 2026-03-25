@@ -164,8 +164,6 @@ def main():
 
         prof.export_chrome_trace(args.profile_output)
         print(f"Profile trace saved to {args.profile_output}")
-        print()
-        print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
 
     if not args.dry_run:
         t = time.time()
