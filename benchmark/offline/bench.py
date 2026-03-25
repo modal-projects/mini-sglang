@@ -105,7 +105,7 @@ def parse_args():
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Skip the main benchmark run (useful with --profile)",
+        help="Skip the main benchmark run",
     )
 
     return parser.parse_args()
@@ -164,6 +164,8 @@ def main():
 
         prof.export_chrome_trace(args.profile_output)
         print(f"Profile trace saved to {args.profile_output}")
+        print()
+        print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
 
     if not args.dry_run:
         t = time.time()
