@@ -2,6 +2,8 @@ import argparse
 import time
 from random import randint, seed
 
+import torch.profiler
+
 from minisgl.core import SamplingParams
 from minisgl.llm import LLM
 
@@ -87,6 +89,32 @@ def parse_args():
         help="Use random dummy weights instead of loading real weights",
     )
 
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="Enable PyTorch profiler to capture execution trace",
+    )
+
+    parser.add_argument(
+        "--profile-output",
+        type=str,
+        default="/tmp/trace.json",
+        help="Profiler output file path (default: /tmp/trace.json)",
+    )
+
+    parser.add_argument(
+        "--profile-num-seqs",
+        type=int,
+        default=16,
+        help="Number of sequences to profile (default: 16)",
+    )
+
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Skip the main benchmark run (useful with --profile)",
+    )
+
     return parser.parse_args()
 
 
@@ -128,17 +156,37 @@ def main():
 
     llm.generate(["Benchmark: "], SamplingParams(temperature=0.1))
 
-    t = time.time()
-    llm.generate(prompt_token_ids, sampling_params)
-    t = time.time() - t
+    if args.profile:
+        profile_prompts = prompt_token_ids[: args.profile_num_seqs]
+        profile_sampling = sampling_params[: args.profile_num_seqs]
 
-    total_tokens = sum(sp.max_tokens for sp in sampling_params)
-    throughput = total_tokens / t
+        with torch.profiler.profile(
+            activities=[
+                torch.profiler.ProfilerActivity.CPU,
+                torch.profiler.ProfilerActivity.CUDA,
+            ],
+            record_shapes=False,
+            profile_memory=False,
+            with_stack=True,
+            with_flops=True,
+        ) as prof:
+            llm.generate(profile_prompts, profile_sampling)
 
-    print(f"Results:")
-    print(f"  Total tokens: {total_tokens}")
-    print(f"  Time: {t:.2f}s")
-    print(f"  Throughput: {throughput:.2f} tok/s")
+        prof.export_chrome_trace(args.profile_output)
+        print(f"Profile trace saved to {args.profile_output}")
+
+    if not args.dry_run:
+        t = time.time()
+        llm.generate(prompt_token_ids, sampling_params)
+        t = time.time() - t
+
+        total_tokens = sum(sp.max_tokens for sp in sampling_params)
+        throughput = total_tokens / t
+
+        print(f"Results:")
+        print(f"  Total tokens: {total_tokens}")
+        print(f"  Time: {t:.2f}s")
+        print(f"  Throughput: {throughput:.2f} tok/s")
 
 
 if __name__ == "__main__":
