@@ -80,6 +80,13 @@ def parse_args():
 
     parser.add_argument("--seed", type=int, default=0, help="Random seed (default: 0)")
 
+    parser.add_argument(
+        "--dummy-weight",
+        action="store_true",
+        dest="use_dummy_weight",
+        help="Use random dummy weights instead of loading real weights",
+    )
+
     return parser.parse_args()
 
 
@@ -102,9 +109,9 @@ def main():
         max_extend_tokens=args.max_extend_tokens,
         cuda_graph_max_bs=args.cuda_graph_max_bs,
         page_size=args.page_size,
+        use_dummy_weight=args.use_dummy_weight,
     )
 
-    print("Generating random prompts...")
     prompt_token_ids = [
         [randint(0, 10000) for _ in range(randint(args.min_input_len, args.max_input_len))]
         for _ in range(args.num_seqs)
@@ -119,10 +126,8 @@ def main():
         for _ in range(args.num_seqs)
     ]
 
-    print("Warming up...")
     llm.generate(["Benchmark: "], SamplingParams(temperature=0.1))
 
-    print("Running benchmark...")
     t = time.time()
     llm.generate(prompt_token_ids, sampling_params)
     t = time.time() - t
@@ -130,7 +135,6 @@ def main():
     total_tokens = sum(sp.max_tokens for sp in sampling_params)
     throughput = total_tokens / t
 
-    print()
     print(f"Results:")
     print(f"  Total tokens: {total_tokens}")
     print(f"  Time: {t:.2f}s")
