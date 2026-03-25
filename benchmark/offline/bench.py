@@ -103,13 +103,6 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--profile-num-seqs",
-        type=int,
-        default=16,
-        help="Number of sequences to profile (default: 16)",
-    )
-
-    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Skip the main benchmark run (useful with --profile)",
@@ -157,9 +150,6 @@ def main():
     llm.generate(["Benchmark: "], SamplingParams(temperature=0.1))
 
     if args.profile:
-        profile_prompts = prompt_token_ids[: args.profile_num_seqs]
-        profile_sampling = sampling_params[: args.profile_num_seqs]
-
         with torch.profiler.profile(
             activities=[
                 torch.profiler.ProfilerActivity.CPU,
@@ -170,7 +160,7 @@ def main():
             with_stack=True,
             with_flops=True,
         ) as prof:
-            llm.generate(profile_prompts, profile_sampling)
+            llm.generate(prompt_token_ids, sampling_params)
 
         prof.export_chrome_trace(args.profile_output)
         print(f"Profile trace saved to {args.profile_output}")
