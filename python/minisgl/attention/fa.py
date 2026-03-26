@@ -46,6 +46,17 @@ class FlashAttentionBackend(BaseAttnBackend):
         self.scale = config.head_dim**-0.5
         self.version = 4 if is_sm100_supported() else 3
 
+        # Compute optimal FA4 parameters
+        self.pack_gqa = config.num_qo_heads > config.num_kv_heads
+
+        # Compute num_splits based on GPU SMs for better parallelization
+        if torch.cuda.is_available():
+            num_SMs = torch.cuda.get_device_properties(self.kvcache.device).multi_processor_count
+            # Use more splits for better SM utilization
+            self.num_splits = min(8, max(1, num_SMs // 32))
+        else:
+            self.num_splits = 4  # Conservative default
+
     def forward(
         self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, layer_id: int, batch: Batch
     ) -> torch.Tensor:
@@ -64,6 +75,8 @@ class FlashAttentionBackend(BaseAttnBackend):
             max_seqlen_k=metadata.max_seqlen_k,
             softmax_scale=self.scale,
             version=self.version,
+            num_splits=self.num_splits,
+            pack_gqa=self.pack_gqa,
         )
 
     def prepare_metadata(self, batch: Batch) -> None:
@@ -157,6 +170,7 @@ def _fa_sgl_impl(
     pack_gqa: bool | None = None,
     causal: bool = True,
 ) -> torch.Tensor:
+    print(f"FA: num_splits={num_splits}, pack_gqa={pack_gqa}, version={version}")
     if version == 4:
         try:
             from flash_attn.cute import flash_attn_varlen_func
