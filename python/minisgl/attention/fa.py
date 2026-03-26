@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Tuple
 
@@ -173,7 +174,12 @@ def _fa_sgl_impl(
                 causal=causal,
             )
         except ImportError:
-            pass  # Fall back to sgl-kernel
+            warnings.warn(
+                "flash-attn-4 not available, falling back to sgl-kernel. "
+                "Install with: pip install flash-attn-4",
+                UserWarning,
+                stacklevel=2,
+            )
 
     try:
         from sgl_kernel.flash_attn import flash_attn_with_kvcache
