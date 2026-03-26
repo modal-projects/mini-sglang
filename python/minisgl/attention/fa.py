@@ -166,7 +166,6 @@ def _fa_sgl_impl(
                 k=k_cache,
                 v=v_cache,
                 cu_seqlens_q=cu_seqlens_q,
-                cu_seqlens_k=cu_seqlens_k,
                 max_seqlen_q=max_seqlen_q,
                 max_seqlen_k=max_seqlen_k,
                 page_table=page_table,
