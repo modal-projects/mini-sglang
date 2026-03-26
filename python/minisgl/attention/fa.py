@@ -13,14 +13,6 @@ from .utils import BaseCaptureData
 if TYPE_CHECKING:
     from minisgl.models import ModelConfig
 
-_FA4_AVAILABLE = False
-try:
-    from flash_attn.cute import flash_attn_varlen_func
-
-    _FA4_AVAILABLE = True
-except ImportError:
-    pass
-
 
 @dataclass
 class FACaptureData(BaseCaptureData):
@@ -162,23 +154,26 @@ def _fa_sgl_impl(
     pack_gqa: bool | None = None,
     causal: bool = True,
 ) -> torch.Tensor:
-    if _FA4_AVAILABLE and version == 4:
-        from flash_attn.cute import flash_attn_varlen_func
+    if version == 4:
+        try:
+            from flash_attn.cute import flash_attn_varlen_func
 
-        max_seqlen_k = cache_seqlens.max().item()
+            max_seqlen_k = cache_seqlens.max().item()
 
-        return flash_attn_varlen_func(
-            q=q,
-            k=k_cache,
-            v=v_cache,
-            cu_seqlens_q=cu_seqlens_q,
-            cu_seqlens_k=cu_seqlens_k,
-            max_seqlen_q=max_seqlen_q,
-            max_seqlen_k=max_seqlen_k,
-            page_table=page_table,
-            softmax_scale=softmax_scale,
-            causal=causal,
-        )
+            return flash_attn_varlen_func(
+                q=q,
+                k=k_cache,
+                v=v_cache,
+                cu_seqlens_q=cu_seqlens_q,
+                cu_seqlens_k=cu_seqlens_k,
+                max_seqlen_q=max_seqlen_q,
+                max_seqlen_k=max_seqlen_k,
+                page_table=page_table,
+                softmax_scale=softmax_scale,
+                causal=causal,
+            )
+        except ImportError:
+            pass  # Fall back to sgl-kernel
 
     try:
         from sgl_kernel.flash_attn import flash_attn_with_kvcache
