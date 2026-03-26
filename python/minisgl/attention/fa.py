@@ -173,13 +173,8 @@ def _fa_sgl_impl(
                 causal=causal,
             )
             return out
-        except ImportError:
-            warnings.warn(
-                "flash-attn-4 not available, falling back to sgl-kernel. "
-                "Install with: pip install flash-attn-4",
-                UserWarning,
-                stacklevel=2,
-            )
+        except (ImportError, RuntimeError, Exception):
+            pass  # Fall back to sgl-kernel (handles ImportError and CUDA graph capture issues)
 
     try:
         from sgl_kernel.flash_attn import flash_attn_with_kvcache
