@@ -13,6 +13,14 @@ from .utils import BaseCaptureData
 if TYPE_CHECKING:
     from minisgl.models import ModelConfig
 
+_FA4_AVAILABLE = False
+try:
+    from flash_attn.cute import flash_attn_varlen_func
+
+    _FA4_AVAILABLE = True
+except ImportError:
+    pass
+
 
 @dataclass
 class FACaptureData(BaseCaptureData):
@@ -148,12 +156,30 @@ def _fa_sgl_impl(
     softmax_scale: float,
     version: int,
     sm_margin: int = 0,
-    window_size: Tuple[int, int] = (-1, -1),  # -1 means infinite context window
-    softcap: float = 0.0,  # 0.0 means deactivated
-    num_splits: int = 0,  # Can be tuned for speed
-    pack_gqa: bool | None = None,  # Can be tuned for speed
+    window_size: Tuple[int, int] = (-1, -1),
+    softcap: float = 0.0,
+    num_splits: int = 0,
+    pack_gqa: bool | None = None,
     causal: bool = True,
 ) -> torch.Tensor:
+    if _FA4_AVAILABLE and version == 4:
+        from flash_attn.cute import flash_attn_varlen_func
+
+        max_seqlen_k = cache_seqlens.max().item()
+
+        return flash_attn_varlen_func(
+            q=q,
+            k=k_cache,
+            v=v_cache,
+            cu_seqlens_q=cu_seqlens_q,
+            cu_seqlens_k=cu_seqlens_k,
+            max_seqlen_q=max_seqlen_q,
+            max_seqlen_k=max_seqlen_k,
+            page_table=page_table,
+            softmax_scale=softmax_scale,
+            causal=causal,
+        )
+
     try:
         from sgl_kernel.flash_attn import flash_attn_with_kvcache
     except ImportError as e:
@@ -178,5 +204,5 @@ def _fa_sgl_impl(
         num_splits=num_splits,
         pack_gqa=pack_gqa,
         causal=causal,
-        ver=version,  # TODO: support FA4 on blackwell
+        ver=version,
     )
