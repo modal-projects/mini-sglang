@@ -61,6 +61,7 @@ class FlashAttentionBackend(BaseAttnBackend):
             cu_seqlens_q=metadata.cu_seqlens_q,
             cu_seqlens_k=metadata.cu_seqlens_k,
             max_seqlen_q=metadata.max_seqlen_q,
+            max_seqlen_k=metadata.max_seqlen_k,
             softmax_scale=self.scale,
             version=self.version,
         )
@@ -146,6 +147,7 @@ def _fa_sgl_impl(
     cu_seqlens_q: torch.Tensor,
     cu_seqlens_k: torch.Tensor,
     max_seqlen_q: int,
+    max_seqlen_k: int,
     softmax_scale: float,
     version: int,
     sm_margin: int = 0,
@@ -155,11 +157,9 @@ def _fa_sgl_impl(
     pack_gqa: bool | None = None,
     causal: bool = True,
 ) -> torch.Tensor:
-    if version == 4 and not torch.cuda.is_current_stream_capturing():
+    if version == 4:
         try:
             from flash_attn.cute import flash_attn_varlen_func
-
-            max_seqlen_k = cache_seqlens.max().item()
 
             out, _ = flash_attn_varlen_func(
                 q=q,
