@@ -170,7 +170,6 @@ def _fa_sgl_impl(
     pack_gqa: bool | None = None,
     causal: bool = True,
 ) -> torch.Tensor:
-    print(f"FA: num_splits={num_splits}, pack_gqa={pack_gqa}, version={version}")
     if version == 4:
         try:
             from flash_attn.cute import flash_attn_varlen_func
