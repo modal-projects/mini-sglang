@@ -155,7 +155,7 @@ def _fa_sgl_impl(
     pack_gqa: bool | None = None,
     causal: bool = True,
 ) -> torch.Tensor:
-    if version == 4:
+    if version == 4 and not torch.cuda.is_current_stream_capturing():
         try:
             from flash_attn.cute import flash_attn_varlen_func
 
@@ -173,8 +173,13 @@ def _fa_sgl_impl(
                 causal=causal,
             )
             return out
-        except (ImportError, RuntimeError, Exception):
-            pass  # Fall back to sgl-kernel (handles ImportError and CUDA graph capture issues)
+        except ImportError:
+            warnings.warn(
+                "flash-attn-4 not available, falling back to sgl-kernel. "
+                "Install with: pip install flash-attn-4",
+                UserWarning,
+                stacklevel=2,
+            )
 
     try:
         from sgl_kernel.flash_attn import flash_attn_with_kvcache
