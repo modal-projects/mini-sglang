@@ -161,7 +161,7 @@ def _fa_sgl_impl(
 
             max_seqlen_k = cache_seqlens.max().item()
 
-            return flash_attn_varlen_func(
+            out, _ = flash_attn_varlen_func(
                 q=q,
                 k=k_cache,
                 v=v_cache,
@@ -172,6 +172,7 @@ def _fa_sgl_impl(
                 softmax_scale=softmax_scale,
                 causal=causal,
             )
+            return out
         except ImportError:
             warnings.warn(
                 "flash-attn-4 not available, falling back to sgl-kernel. "
