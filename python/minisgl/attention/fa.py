@@ -198,7 +198,7 @@ def _fa_sgl_impl(
                     "v_cache": v_cache,
                     "cu_seqlens_q": cu_seqlens_q,
                     "cu_seqlens_k": cu_seqlens_k,
-                    "page_table": page_table,
+                    # "page_table": page_table,
                 }
                 kwargs = {
                     "max_seqlen_q": max_seqlen_q,
@@ -209,6 +209,7 @@ def _fa_sgl_impl(
                     "pack_gqa": pack_gqa,
                     "causal": causal,
                 }
+                breakpoint()
                 torch.save(tensors, "/tmp/tensors.pt")
                 Path("/tmp/kwargs.json").write_text(json.dumps(kwargs))
                 raise RuntimeError("Captured slow execution")
