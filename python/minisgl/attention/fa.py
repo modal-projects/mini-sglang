@@ -211,7 +211,6 @@ def _fa_sgl_impl(
                 }
                 torch.save(tensors, "/tmp/tensors.pt")
                 Path("/tmp/kwargs.json").write_text(json.dumps(kwargs))
-                torch.cuda.synchronize()
                 raise RuntimeError("Captured slow execution")
             return out
         except ImportError:
