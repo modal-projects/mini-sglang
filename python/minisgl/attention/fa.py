@@ -176,7 +176,7 @@ def _fa_sgl_impl(
                 v=v_cache,
                 cu_seqlens_q=cu_seqlens_q,
                 cu_seqlens_k=cu_seqlens_k if page_table is None else None,
-                seq_used_k=cache_seqlens if page_table is not None else None,
+                seqused_k=cache_seqlens if page_table is not None else None,
                 max_seqlen_q=max_seqlen_q,
                 max_seqlen_k=max_seqlen_k,
                 page_table=page_table,
