@@ -189,29 +189,8 @@ def _fa_sgl_impl(
             t_elapsed = time.monotonic_ns() - t_start
             if 5e5 < t_elapsed < 5e9:
                 print(f"slow: {t_elapsed // 1000} us")
-                import json
-                from pathlib import Path
-
-                tensors = {
-                    "q": q,
-                    "k_cache": k_cache,
-                    "v_cache": v_cache,
-                    "cu_seqlens_q": cu_seqlens_q,
-                    "cu_seqlens_k": cu_seqlens_k,
-                    # "page_table": page_table,
-                }
-                kwargs = {
-                    "max_seqlen_q": max_seqlen_q,
-                    "max_seqlen_k": max_seqlen_k,
-                    "softmax_scale": softmax_scale,
-                    "window_size": window_size,
-                    "num_splits": num_splits,
-                    "pack_gqa": pack_gqa,
-                    "causal": causal,
-                }
-                breakpoint()
-                torch.save(tensors, "/tmp/tensors.pt")
-                Path("/tmp/kwargs.json").write_text(json.dumps(kwargs))
+                print(cache_seqlens.shape, cache_seqlens.sum())
+                print(cache_seqlens)
                 raise RuntimeError("Captured slow execution")
             return out
         except ImportError:
