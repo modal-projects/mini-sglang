@@ -166,10 +166,10 @@ def _fa_sgl_impl(
         try:
             from flash_attn.cute import flash_attn_varlen_func
 
-            torch.cuda.synchronize()
-            import time
+            # torch.cuda.synchronize()
+            # import time
 
-            t_start = time.monotonic_ns()
+            # t_start = time.monotonic_ns()
             out, _ = flash_attn_varlen_func(
                 q=q,
                 k=k_cache,
@@ -186,12 +186,12 @@ def _fa_sgl_impl(
                 pack_gqa=pack_gqa,
                 causal=causal,
             )
-            torch.cuda.synchronize()
-            t_elapsed = time.monotonic_ns() - t_start
-            if 5e5 < t_elapsed < 5e9:
-                print(f"slow: {t_elapsed // 1000} us")
-                breakpoint()
-                raise RuntimeError("Captured slow execution")
+            # torch.cuda.synchronize()
+            # t_elapsed = time.monotonic_ns() - t_start
+            # if 5e5 < t_elapsed < 5e9:
+            #     print(f"slow: {t_elapsed // 1000} us")
+            #     breakpoint()
+            #     raise RuntimeError("Captured slow execution")
             return out
         except ImportError:
             warnings.warn(
