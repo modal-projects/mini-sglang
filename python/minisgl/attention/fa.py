@@ -46,16 +46,8 @@ class FlashAttentionBackend(BaseAttnBackend):
         self.scale = config.head_dim**-0.5
         self.version = 4 if is_sm100_supported() else 3
 
-        # Compute optimal FA4 parameters
+        self.num_splits = 0  # autotune
         self.pack_gqa = config.num_qo_heads > config.num_kv_heads
-
-        # Compute num_splits based on GPU SMs for better parallelization
-        if torch.cuda.is_available():
-            num_SMs = torch.cuda.get_device_properties(self.kvcache.device).multi_processor_count
-            # Use more splits for better SM utilization
-            self.num_splits = min(8, max(1, num_SMs // 32))
-        else:
-            self.num_splits = 4  # Conservative default
 
     def forward(
         self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, layer_id: int, batch: Batch
@@ -174,6 +166,10 @@ def _fa_sgl_impl(
         try:
             from flash_attn.cute import flash_attn_varlen_func
 
+            torch.cuda.synchronize()
+            import time
+
+            t_start = time.monotonic_ns()
             out, _ = flash_attn_varlen_func(
                 q=q,
                 k=k_cache,
@@ -189,6 +185,33 @@ def _fa_sgl_impl(
                 pack_gqa=pack_gqa,
                 causal=causal,
             )
+            torch.cuda.synchronize()
+            t_elapsed = time.monotonic_ns() - t_start
+            if 5e5 < t_elapsed < 5e9:
+                print(f"slow: {t_elapsed // 1000} us")
+                import json
+                from pathlib import Path
+
+                tensors = {
+                    "q": q,
+                    "k_cache": k_cache,
+                    "v_cache": v_cache,
+                    "cu_seqlens_q": cu_seqlens_q,
+                    "cu_seqlens_k": cu_seqlens_k,
+                    "page_table": page_table,
+                }
+                kwargs = {
+                    "max_seqlen_q": max_seqlen_q,
+                    "max_seqlen_k": max_seqlen_k,
+                    "softmax_scale": softmax_scale,
+                    "window_size": window_size,
+                    "num_splits": num_splits,
+                    "pack_gqa": pack_gqa,
+                    "causal": causal,
+                }
+                torch.save(tensors, "/tmp/tensors.pt")
+                Path("/tmp/kwargs.json").write_text(json.dumps(kwargs))
+                raise RuntimeError("Captured slow execution")
             return out
         except ImportError:
             warnings.warn(
