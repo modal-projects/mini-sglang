@@ -170,7 +170,7 @@ def _fa_sgl_impl(
             # import time
 
             # t_start = time.monotonic_ns()
-            out, _ = flash_attn_varlen_func(
+            out = flash_attn_varlen_func(
                 q=q,
                 k=k_cache,
                 v=v_cache,
