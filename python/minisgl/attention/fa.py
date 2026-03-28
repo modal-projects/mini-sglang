@@ -164,7 +164,7 @@ def _fa_sgl_impl(
 ) -> torch.Tensor:
     if version == 4:
         try:
-            from flash_attn.cute import flash_attn_varlen_func
+            from sgl_kernel._fa4_interface import flash_attn_varlen_func
 
             # torch.cuda.synchronize()
             # import time
