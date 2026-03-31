@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Tuple
+import warnings
 
 import torch
 from minisgl.core import Batch, get_global_ctx
@@ -155,31 +156,24 @@ def _fa_sgl_impl(
     causal: bool = True,
 ) -> torch.Tensor:
     if version == 4:
-        try:
-            from sgl_kernel._fa4_interface import flash_attn_varlen_func
+        from sgl_kernel._fa4_interface import flash_attn_varlen_func
 
-            out = flash_attn_varlen_func(
-                q=q,
-                k=k_cache,
-                v=v_cache,
-                cu_seqlens_q=cu_seqlens_q,
-                cu_seqlens_k=cu_seqlens_k if page_table is None else None,
-                seqused_k=cache_seqlens if page_table is not None else None,
-                page_table=page_table,
-                softmax_scale=softmax_scale,
-                window_size=window_size,
-                num_splits=num_splits,
-                pack_gqa=pack_gqa,
-                causal=causal,
-            )
-            return out
-        except ImportError:
-            warnings.warn(
-                "flash-attn-4 not available, falling back to sgl-kernel. "
-                "Install with: pip install flash-attn-4",
-                UserWarning,
-                stacklevel=2,
-            )
+        out = flash_attn_varlen_func(
+            q=q,
+            k=k_cache,
+            v=v_cache,
+            cu_seqlens_q=cu_seqlens_q,
+            cu_seqlens_k=cu_seqlens_k if page_table is None else None,
+            seqused_k=cache_seqlens if page_table is not None else None,
+            seqused_q=cache_seqlens if page_table is not None else None,
+            page_table=page_table,
+            softmax_scale=softmax_scale,
+            window_size=window_size,
+            num_splits=num_splits,
+            pack_gqa=pack_gqa,
+            causal=causal,
+        )
+        return out
 
     try:
         from sgl_kernel.flash_attn import flash_attn_with_kvcache
