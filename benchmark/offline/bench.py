@@ -1,14 +1,15 @@
 # Adapted from: https://github.com/GeeeekExplorer/nano-vllm/blob/main/bench.py
 
+import os
 import time
 from random import randint, seed
 
 from minisgl.core import SamplingParams
 from minisgl.llm import LLM
 
-
-import os
 attention_backend = os.environ.get("MINISGL_ATTENTION_BACKEND") or "auto"
+model = os.environ.get("MINISGL_BENCHMARK_MODEL") or "Qwen/Qwen3-0.6B"
+
 
 def main():
     seed(0)
@@ -18,7 +19,7 @@ def main():
 
     # align the hyperparameters
     llm = LLM(
-        "Qwen/Qwen3-14B",
+        model,
         max_seq_len_override=4096,
         max_extend_tokens=16384,
         cuda_graph_max_bs=256,
