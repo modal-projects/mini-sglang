@@ -171,7 +171,7 @@ def _fa_sgl_impl(
             softmax_scale=softmax_scale,
             causal=causal,
             window_size=fa4_window_size,
-            num_splits=num_splits,
+            num_splits=num_splits if num_splits != 0 else 1,
             pack_gqa=pack_gqa,
         )
         return out
