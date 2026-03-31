@@ -164,14 +164,14 @@ def _fa_sgl_impl(
             v=v_cache,
             cu_seqlens_q=cu_seqlens_q,
             cu_seqlens_k=cu_seqlens_k if page_table is None else None,
-            seqused_k=cache_seqlens if page_table is not None else None,
-            seqused_q=cache_seqlens if page_table is not None else None,
+            # seqused_q=cache_seqlens if page_table is not None else None,
+            # seqused_k=cache_seqlens if page_table is not None else None,
             page_table=page_table,
             softmax_scale=softmax_scale,
+            causal=causal,
             window_size=window_size,
             num_splits=num_splits,
             pack_gqa=pack_gqa,
-            causal=causal,
         )
         return out
 
