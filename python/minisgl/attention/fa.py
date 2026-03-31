@@ -158,17 +158,18 @@ def _fa_sgl_impl(
     if version == 4:
         from sgl_kernel._fa4_interface import flash_attn_varlen_func
 
+        fa4_window_size = tuple(None if size == -1 else size for size in window_size)
+
         out = flash_attn_varlen_func(
             q=q,
             k=k_cache,
             v=v_cache,
             cu_seqlens_q=cu_seqlens_q,
             cu_seqlens_k=cu_seqlens_k if page_table is None else None,
-            seqused_k=cache_seqlens,
             page_table=page_table,
             softmax_scale=softmax_scale,
             causal=causal,
-            window_size=window_size,
+            window_size=fa4_window_size,
             num_splits=num_splits,
             pack_gqa=pack_gqa,
         )
