@@ -164,8 +164,7 @@ def _fa_sgl_impl(
             v=v_cache,
             cu_seqlens_q=cu_seqlens_q,
             cu_seqlens_k=cu_seqlens_k if page_table is None else None,
-            # seqused_q=cache_seqlens if page_table is not None else None,
-            # seqused_k=cache_seqlens if page_table is not None else None,
+            seqused_k=cache_seqlens,
             page_table=page_table,
             softmax_scale=softmax_scale,
             causal=causal,
@@ -199,5 +198,5 @@ def _fa_sgl_impl(
         num_splits=num_splits,
         pack_gqa=pack_gqa,
         causal=causal,
-        ver=version,  # TODO: support FA4 on blackwell
+        ver=version,
     )
