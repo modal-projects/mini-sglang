@@ -7,6 +7,9 @@ from minisgl.core import SamplingParams
 from minisgl.llm import LLM
 
 
+import os
+attention_backend = os.environ.get("MINISGL_ATTENTION_BACKEND") or "auto"
+
 def main():
     seed(0)
     num_seqs = 256
@@ -18,8 +21,9 @@ def main():
         "Qwen/Qwen3-0.6B",
         max_seq_len_override=4096,
         max_extend_tokens=16384,
-        cuda_graph_max_bs=256,
+        cuda_graph_max_bs=0,
         page_size=256,
+        attention_backend=attention_backend,
     )
 
     prompt_token_ids = [

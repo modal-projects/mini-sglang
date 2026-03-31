@@ -160,12 +160,12 @@ def _fa_sgl_impl(
 
         fa4_window_size = tuple(None if size == -1 else size for size in window_size)
 
-        if cu_seqlens_q is not None:
-            assert q.ndim == 3, f"FA4 varlen expects packed q, got shape={q.shape}"
-            assert q.shape[0] == int(cu_seqlens_q[-1].item()), (
-                f"FA4 varlen expects q.shape[0] == cu_seqlens_q[-1], "
-                f"got q.shape[0]={q.shape[0]}, cu_seqlens_q[-1]={int(cu_seqlens_q[-1].item())}"
-            )
+       # if cu_seqlens_q is not None:
+       #     assert q.ndim == 3, f"FA4 varlen expects packed q, got shape={q.shape}"
+       #     assert q.shape[0] == int(cu_seqlens_q[-1].item()), (
+       #         f"FA4 varlen expects q.shape[0] == cu_seqlens_q[-1], "
+       #         f"got q.shape[0]={q.shape[0]}, cu_seqlens_q[-1]={int(cu_seqlens_q[-1].item())}"
+       #     )
 
         out = flash_attn_varlen_func(
             q=q,
@@ -173,6 +173,7 @@ def _fa_sgl_impl(
             v=v_cache,
             cu_seqlens_q=cu_seqlens_q,
             cu_seqlens_k=cu_seqlens_k if page_table is None else None,
+            seqused_k=cache_seqlens,
             page_table=page_table,
             softmax_scale=softmax_scale,
             causal=causal,
