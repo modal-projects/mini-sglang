@@ -15,7 +15,7 @@ def main():
     seed(0)
     num_seqs = 256
     max_input_len = 1024
-    max_ouput_len = 1024
+    max_output_len = 16
 
     # align the hyperparameters
     llm = LLM(
@@ -31,7 +31,7 @@ def main():
         [randint(0, 10000) for _ in range(randint(100, max_input_len))] for _ in range(num_seqs)
     ]
     sampling_params = [
-        SamplingParams(temperature=0.6, ignore_eos=True, max_tokens=randint(100, max_ouput_len))
+        SamplingParams(temperature=0.6, ignore_eos=True, max_tokens=randint(1, max_output_len))
         for _ in range(num_seqs)
     ]
     # warmup
