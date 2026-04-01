@@ -23,7 +23,7 @@ def main():
         max_seq_len_override=4096,
         max_extend_tokens=16384,
         cuda_graph_max_bs=256,
-        page_size=256,
+        page_size=16,
         attention_backend=attention_backend,
     )
 
