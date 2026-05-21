@@ -106,6 +106,8 @@ class Context:
     moe_backend: BaseMoeBackend = field(init=False)
     kv_cache: BaseKVCachePool = field(init=False)
     _batch: Batch | None = field(default=None, init=False)
+    capture_hidden_layers: list[int] | None = None
+    captured_hidden_states: list[torch.Tensor] = field(default_factory=list)
 
     @property
     def batch(self) -> Batch:

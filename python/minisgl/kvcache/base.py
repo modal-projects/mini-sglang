@@ -24,6 +24,11 @@ class BaseKVCachePool(ABC):
         self, k: torch.Tensor, v: torch.Tensor, out_loc: torch.Tensor, layer_id: int
     ) -> None: ...
 
+    def crop(self, keep_len: int) -> None:
+        for layer_id in range(self.num_layers):
+            self.k_cache(layer_id)[:, keep_len:].zero_()
+            self.v_cache(layer_id)[:, keep_len:].zero_()
+
     @property
     @abstractmethod
     def device(self) -> torch.device: ...

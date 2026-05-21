@@ -16,9 +16,13 @@ if TYPE_CHECKING:
 def _run_scheduler(args: ServerArgs, ack_queue: mp.Queue[str]) -> None:
     import torch
     from minisgl.scheduler import Scheduler
+    from minisgl.scheduler.spec_dec import SpecDecScheduler
 
     with torch.inference_mode():
-        scheduler = Scheduler(args)
+        if args.draft_model_path:
+            scheduler = SpecDecScheduler(args)
+        else:
+            scheduler = Scheduler(args)
         scheduler.sync_all_ranks()
 
         if args.tp_info.is_primary():

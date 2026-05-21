@@ -56,10 +56,17 @@ class Qwen3Model(BaseOP):
         )
 
     def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
+        from minisgl.core import get_global_ctx
+        ctx = get_global_ctx()
         x = self.embed_tokens.forward(input_ids)
         residual: torch.Tensor | None = None
-        for layer in self.layers.op_list:
+        capture = ctx.capture_hidden_layers
+        if capture is not None:
+            ctx.captured_hidden_states = [x]
+        for i, layer in enumerate(self.layers.op_list):
             x, residual = layer.forward(x, residual)
+            if capture is not None and i + 1 in capture:
+                ctx.captured_hidden_states.append(x)
         return self.norm.forward(x, residual)[0]
 
 

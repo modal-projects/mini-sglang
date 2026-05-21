@@ -223,6 +223,20 @@ def parse_args(args: List[str], run_shell: bool = False) -> Tuple[ServerArgs, bo
         help="Run the server in shell mode.",
     )
 
+    parser.add_argument(
+        "--draft-model-path",
+        type=str,
+        default="",
+        help="Path to the DFlash draft model for speculative decoding. Leave empty to disable.",
+    )
+
+    parser.add_argument(
+        "--draft-block-size",
+        type=int,
+        default=16,
+        help="Block size for speculative decoding draft model.",
+    )
+
     # Parse arguments
     kwargs = parser.parse_args(args).__dict__.copy()
 
