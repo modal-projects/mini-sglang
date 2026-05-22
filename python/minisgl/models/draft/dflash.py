@@ -116,3 +116,35 @@ class DFlashDraftModel(BaseOP):
         variance = x.pow(2).mean(-1, keepdim=True)
         x = x * torch.rsqrt(variance + self._eps)
         return self.norm * x.to(input_dtype)
+
+    def forward_graph(
+        self,
+        *,
+        noise_embedding: torch.Tensor,
+        target_hidden_padded: torch.Tensor,
+        ctx_len: int,
+        cos: torch.Tensor,
+        sin: torch.Tensor,
+        attn_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        """CUDA-graph-friendly forward with padded target_hidden."""
+        hidden_states = noise_embedding
+        projected_target = self._project_target(target_hidden_padded)
+        pos_emb = (cos, sin)
+
+        for layer in self.layers:
+            hidden_states = layer(
+                hidden_states=hidden_states,
+                target_hidden=projected_target,
+                position_embeddings=pos_emb,
+                attention_mask=attn_mask,
+                past_key_value=None,
+                use_cache=False,
+                position_ids=None,
+            )
+
+        input_dtype = hidden_states.dtype
+        x = hidden_states.to(torch.float32)
+        variance = x.pow(2).mean(-1, keepdim=True)
+        x = x * torch.rsqrt(variance + self._eps)
+        return self.norm * x.to(input_dtype)
