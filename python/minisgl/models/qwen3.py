@@ -65,7 +65,7 @@ class Qwen3Model(BaseOP):
             ctx.captured_hidden_states = [x]
         for i, layer in enumerate(self.layers.op_list):
             x, residual = layer.forward(x, residual)
-            if capture is not None and i + 1 in capture:
+            if capture is not None:
                 ctx.captured_hidden_states.append(x)
         return self.norm.forward(x, residual)[0]
 
