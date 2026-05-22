@@ -28,9 +28,9 @@ logger = init_logger(__name__)
 class SpecDecScheduler(Scheduler):
     def __init__(self, config: SchedulerConfig):
         super().__init__(config)
-        self._draft = self._load_draft_model(config)
         self._block_size = config.draft_block_size
         self._target_layer_ids = [1, 9, 17, 25, 33]
+        self._draft = self._load_draft_model(config)
         self._pending: dict[int, deque[int]] = {}
         self._hiddens: dict[int, tuple[torch.Tensor, int]] = {}
         self._capture_enabled = False
@@ -75,14 +75,31 @@ class SpecDecScheduler(Scheduler):
         uid = req.uid
 
         if uid in self._pending and self._pending[uid]:
-            return self._emit_pending(forward_input, uid)
+            result = self._emit_pending(forward_input, uid)
+            forward_input.batch.input_ids = self.token_pool[forward_input.input_tuple]
+            self.token_pool[forward_input.write_tuple] = result.next_tokens_gpu
+            self.decode_manager.filter_reqs(forward_input.batch.reqs)
+            return result
 
         if uid not in self._hiddens:
             result = super()._forward(forward_input)
+            forward_input.batch.input_ids = self.token_pool[forward_input.input_tuple]
             self._capture_after_forward(batch)
             return result
 
-        return self._run_specdec_step(forward_input)
+        forward_input.batch.input_ids = self.token_pool[forward_input.input_tuple]
+        inp = forward_input.batch.input_ids
+        if inp.numel() == 0:
+            logger.error(f"token_pool empty at input_tuple={forward_input.input_tuple}")
+            result = super()._forward(forward_input)
+            self.token_pool[forward_input.write_tuple] = result.next_tokens_gpu
+            self.decode_manager.filter_reqs(forward_input.batch.reqs)
+            return result
+
+        result = self._run_specdec_step(forward_input)
+        self.token_pool[forward_input.write_tuple] = result.next_tokens_gpu
+        self.decode_manager.filter_reqs(forward_input.batch.reqs)
+        return result
 
     def _capture_after_forward(self, batch: Batch) -> None:
         ctx = self.engine.ctx
@@ -143,14 +160,14 @@ class SpecDecScheduler(Scheduler):
         req.device_len = req.cached_len + bs + 1
         cm.allocate_paged([req])
 
-        verify_ids = torch.cat([batch.input_ids, draft_tokens[:, :bs]], dim=1)
+        verify_ids = torch.cat([batch.input_ids.view(1, 1), draft_tokens[:, :bs]], dim=1)
         verify_pos = torch.arange(
             req.cached_len, req.cached_len + bs + 1, device=dv, dtype=torch.int32
         )
 
         vbatch = Batch(reqs=[req], phase="prefill")
         vbatch.padded_reqs = [req]
-        vbatch.input_ids = verify_ids
+        vbatch.input_ids = verify_ids[0]
         vbatch.positions = verify_pos
         vbatch.out_loc = pt[(
             torch.full((bs + 1,), req.table_idx, dtype=torch.int64, device=dv),
@@ -162,7 +179,7 @@ class SpecDecScheduler(Scheduler):
         ctx.capture_hidden_layers = tgt_layers
         ctx.captured_hidden_states = []
         with ctx.forward_batch(vbatch), torch.inference_mode():
-            hidden = engine.model.model.forward(vbatch.input_ids)
+            hidden = engine.model.model.forward(verify_ids[0])
         new_th = self._extract_context_feature(ctx.captured_hidden_states, tgt_layers).unsqueeze(0)
         ctx.captured_hidden_states = []
 

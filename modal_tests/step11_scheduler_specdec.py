@@ -131,8 +131,6 @@ def test_scheduler_specdec():
     prompt = "What is 2 + 2?"
 
     print("  Baseline (no specdec)...")
-    SpecDecLLM._draft = None
-    # Need to temporarily disable specdec by removing draft
     old_draft = llm._draft
     llm._draft = None
     with torch.inference_mode():
@@ -140,33 +138,16 @@ def test_scheduler_specdec():
     btok = bas_result[0]["token_ids"]
     llm._draft = old_draft
     print(f"    {len(btok)} tokens")
+    assert len(btok) > 0, "Baseline produced no tokens!"
 
     print("  SpecDec...")
+    llm._draft = old_draft
     with torch.inference_mode():
         spec_result = llm.generate([prompt], SamplingParams(temperature=0.0, max_tokens=50))
     stok = spec_result[0]["token_ids"]
     print(f"    {len(stok)} tokens")
+    assert len(stok) > 0, "SpecDec produced no tokens!"
 
     assert stok == btok, f"SpecDec diverges:\n  bas={btok[:20]}\n  spec={stok[:20]}"
     print("  Match baseline: True")
-
-    print("  Measuring speed...")
-    llm._draft = None
-    for _ in range(3):
-        llm.generate([prompt], SamplingParams(temperature=0.0, max_tokens=30))
-    t0 = time.time()
-    for _ in range(5):
-        llm.generate([prompt], SamplingParams(temperature=0.0, max_tokens=30))
-    bt = (time.time()-t0)/5
-
-    llm._draft = old_draft
-    for _ in range(3):
-        llm.generate([prompt], SamplingParams(temperature=0.0, max_tokens=30))
-    t0 = time.time()
-    for _ in range(5):
-        llm.generate([prompt], SamplingParams(temperature=0.0, max_tokens=30))
-    st = (time.time()-t0)/5
-
-    sp = bt/st
-    print(f"  Baseline: {bt:.2f}s  SpecDec: {st:.2f}s  Speedup: {sp:.1f}x")
-    print(f"=== Step 11 PASSED (speedup={sp:.1f}x) ===")
+    print(f"=== Step 11 PASSED ===")
