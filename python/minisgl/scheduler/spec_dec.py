@@ -1,8 +1,9 @@
 """Speculative decoding scheduler using DFlash draft model.
 
-For single-request mode (shell mode / max_running_req=1), intercepts decode
-forward passes and runs speculative decoding: draft model generates B candidate
-tokens, target model verifies, accepted tokens are queued and emitted one per step.
+For single-request decode, intercepts decode forward passes and runs
+speculative decoding: draft model generates B candidate tokens, target
+model verifies via multi-token prefill forward, accepted tokens are
+queued and emitted one per step.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from collections import deque
 from typing import TYPE_CHECKING
 
 import torch
+import torch.nn.functional as F
 from minisgl.core import Batch, get_global_ctx
 from minisgl.utils import init_logger
 
@@ -88,7 +90,7 @@ class SpecDecScheduler(Scheduler):
             for req in batch.reqs:
                 th = self._extract_context_feature(
                     ctx.captured_hidden_states, self._target_layer_ids
-                )
+                ).unsqueeze(0)
                 self._hiddens[req.uid] = (th, req.cached_len)
             ctx.captured_hidden_states = []
         ctx.capture_hidden_layers = self._target_layer_ids if self._draft else None
@@ -99,75 +101,83 @@ class SpecDecScheduler(Scheduler):
         token = self._pending[uid].popleft()
         if not self._pending[uid]:
             del self._pending[uid]
-        req.complete_one()
+        req.cached_len += 1
+        req.device_len += 1
         return self._fake_output(token)
 
     def _run_specdec_step(self, forward_input: ForwardInput):
         batch = forward_input.batch
         req = batch.reqs[0]
         uid = req.uid
-        th, ctx_pos = self._hiddens.pop(uid)
+        th, _ = self._hiddens.pop(uid)
         bs = self._block_size
         dv = self.device
+        dt = self.engine.dtype
+        engine = self.engine
+        pt = engine.page_table
+        cm = self.cache_manager
+        ew = engine.model.model.embed_tokens.weight
+        lw = engine.model.lm_head.weight
+        tgt_layers = self._target_layer_ids
 
         mask_token = 151669
         draft_ids = torch.full((1, bs + 1), mask_token, dtype=torch.int32, device=dv)
         draft_ids[:, 0] = batch.input_ids[0]
-        ne = self.engine.model.embed_tokens(draft_ids)
+        ne = ew[draft_ids.flatten().to(torch.int64)].unsqueeze(0).to(dtype=dt, device=dv)
 
         ctx_len = th.shape[1]
-        pid_start = req.cached_len - ctx_len + 1 if req.cached_len >= ctx_len else 0
+        pid_start = max(0, req.cached_len - ctx_len + 1)
         full_pid = torch.arange(pid_start, pid_start + ctx_len + bs + 1, device=dv).unsqueeze(0)
         cos, sin = self._draft.rotary_emb(ne, full_pid)
 
         with torch.inference_mode():
             draft_out = self._draft.forward(
-                noise_embedding=ne, target_hidden=th, position_ids=full_pid, cos=cos, sin=sin,
+                noise_embedding=ne, target_hidden=th.to(dtype=dt, device=dv),
+                position_ids=full_pid, cos=cos, sin=sin,
             )
-        draft_logits = self.engine.model.lm_head.forward(draft_out)[:, -(bs):, :]
+        draft_logits = F.linear(draft_out, lw)[:, -(bs):, :]
         draft_tokens = self.engine.sampler.sample(
             draft_logits.squeeze(0), forward_input.sample_args
         ).unsqueeze(0).to(torch.int32)
 
+        req.device_len = req.cached_len + bs + 1
+        cm.allocate_paged([req])
+
         verify_ids = torch.cat([batch.input_ids, draft_tokens[:, :bs]], dim=1)
         verify_pos = torch.arange(
             req.cached_len, req.cached_len + bs + 1, device=dv, dtype=torch.int32
-        ).unsqueeze(0)
+        )
 
-        verify_batch = Batch(reqs=[req], phase="decode")
-        verify_batch.padded_reqs = [req]
-        verify_batch.input_ids = verify_ids[0]
-        verify_batch.positions = verify_pos[0]
+        vbatch = Batch(reqs=[req], phase="prefill")
+        vbatch.padded_reqs = [req]
+        vbatch.input_ids = verify_ids
+        vbatch.positions = verify_pos
+        vbatch.out_loc = pt[(
+            torch.full((bs + 1,), req.table_idx, dtype=torch.int64, device=dv),
+            verify_pos.to(torch.int64),
+        )]
+        engine.attn_backend.prepare_metadata(vbatch)
 
-        pt = self.engine.page_table
-        out_idx = torch.full_like(verify_pos, req.table_idx, dtype=torch.int64)
-        verify_batch.out_loc = pt[out_idx, verify_pos.to(torch.int64)]
-
-        self.engine.attn_backend.prepare_metadata(verify_batch)
-
-        ctx = self.engine.ctx
-        ctx.capture_hidden_layers = self._target_layer_ids
+        ctx = engine.ctx
+        ctx.capture_hidden_layers = tgt_layers
         ctx.captured_hidden_states = []
-        with ctx.forward_batch(verify_batch), torch.inference_mode():
-            verify_logits = self.engine.model.forward()
-        new_hidden = self._extract_context_feature(ctx.captured_hidden_states, self._target_layer_ids)
+        with ctx.forward_batch(vbatch), torch.inference_mode():
+            hidden = engine.model.model.forward(vbatch.input_ids)
+        new_th = self._extract_context_feature(ctx.captured_hidden_states, tgt_layers).unsqueeze(0)
         ctx.captured_hidden_states = []
 
-        verify_logits_2d = verify_logits[-bs - 1:] if verify_logits.ndim == 2 else verify_logits
-        verify_tokens = self.engine.sampler.sample(verify_logits_2d, forward_input.sample_args).unsqueeze(0).to(torch.int32)
-
-        matches = (draft_tokens[:, :-1] == verify_tokens[:, 1:-1]).to(torch.int32)
+        vl = F.linear(hidden, lw)
+        vt = torch.argmax(vl, dim=-1).unsqueeze(0)
+        matches = (draft_tokens == vt[:, :-1]).to(torch.int32)
         accept_len = matches.cumprod(dim=1).sum(dim=1).item()
 
-        keep_pages = req.cached_len + accept_len + 1
-        self.engine.kv_cache.crop(keep_pages)
+        keep = req.cached_len + accept_len + 1
+        engine.kv_cache.crop(keep)
+        req.cached_len = keep
+        req.device_len = keep
 
-        for i in range(accept_len + 1):
-            req.complete_one()
-
-        accepted = verify_tokens[:, :accept_len + 2].squeeze(0).tolist()
-
-        self._hiddens[uid] = (new_hidden[:, :accept_len + 2, :], req.cached_len)
+        accepted = vt[0, :accept_len + 1].tolist()
+        self._hiddens[uid] = (new_th[:, :accept_len + 1, :], req.cached_len)
 
         if accepted:
             first = accepted.pop(0)
@@ -175,7 +185,7 @@ class SpecDecScheduler(Scheduler):
                 self._pending[uid] = deque(accepted)
             return self._fake_output(first)
 
-        return self._fake_output(verify_tokens[0, 0].item())
+        return self._fake_output(vt[0, 0].item())
 
     def _fake_output(self, token: int) -> ForwardOutput:
         from minisgl.engine import ForwardOutput
