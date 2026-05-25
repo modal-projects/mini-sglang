@@ -121,10 +121,9 @@ def test_scheduler_specdec():
     print("  Building SpecDecLLM...")
     t0 = time.time()
     llm = SpecDecLLM(
-        "Qwen/Qwen3-8B",
-        draft_model_path="z-lab/Qwen3-8B-DFlash-b16",
-        draft_block_size=16,
-        page_size=1, max_running_req=2, cuda_graph_max_bs=2,
+        "Qwen/Qwen3-8B", draft_model_path="z-lab/Qwen3-8B-DFlash-b16",
+        draft_block_size=16, page_size=1, max_running_req=2, cuda_graph_max_bs=2,
+        max_extend_tokens=64,
     )
     print(f"    built in {time.time()-t0:.0f}s")
 
