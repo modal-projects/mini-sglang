@@ -5,11 +5,12 @@ Run: modal run modal_tests/step3_6_draft_model.py
 
 import modal
 
-_image = (modal.Image.debian_slim(python_version="3.12").pip_install(
-    "torch==2.9.1","transformers==4.57.3","accelerate","safetensors",
-    "huggingface_hub[hf_transfer]","datasets","msgpack","pyzmq","modelscope",
-).env({"HF_HUB_ENABLE_HF_TRANSFER":"1","TOKENIZERS_PARALLELISM":"false"})
-.add_local_dir("python/minisgl","/app/minisgl"))
+_image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install("torch==2.9.1","transformers==4.57.3","accelerate","safetensors","huggingface_hub[hf_transfer]")
+    .env({"HF_HUB_ENABLE_HF_TRANSFER":"1","TOKENIZERS_PARALLELISM":"false"})
+    .add_local_dir("python/minisgl","/app/minisgl")
+)
 
 app = modal.App("dflash-step3-6")
 fv = modal.Volume.from_name("dflash-fixtures", create_if_missing=True)

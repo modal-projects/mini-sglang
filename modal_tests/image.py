@@ -1,14 +1,14 @@
-"""Shared Modal image definition for DFlash tests.
+"""Shared Modal image definitions for DFlash tests.
 
-Provides two images:
-  - _image_base: torch + transformers + safetensors (for HF reference + pure-torch tests)
-  - image: extends base with mini-sglang deps (for integration tests that import minisgl)
+Provides three images:
+  - image_base: torch + transformers (for HF reference tests)
+  - image: image_base + minisgl deps (flashinfer, etc.)
+  - image_minisgl: image_base + minisgl source only (for tests that import
+    minisgl module without needing flashinfer/Engine)
 """
 
 import modal
 
-# Python version matched to pyproject.toml
-# torch==2.9.1 and transformers==4.57.3 matched to DFlash paper
 _image_base = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install(
@@ -17,6 +17,7 @@ _image_base = (
         "accelerate",
         "safetensors",
         "huggingface_hub[hf_transfer]",
+        "datasets",
     )
     .env({
         "HF_HUB_ENABLE_HF_TRANSFER": "1",
@@ -24,22 +25,17 @@ _image_base = (
     })
 )
 
+image_minisgl = _image_base.add_local_dir("python/minisgl", "/app/minisgl")
+
 image = (
-    _image_base.pip_install(
+    image_minisgl.pip_install(
         "flashinfer-python>=0.5.3",
         "sgl_kernel>=0.3.17.post1",
         "pyzmq",
         "msgpack",
         "modelscope",
     )
-    .add_local_dir(
-        "python/minisgl",
-        "/app/minisgl",
-    )
-    .add_local_file(
-        "pyproject.toml",
-        "/app/pyproject.toml",
-    )
+    .add_local_file("pyproject.toml", "/app/pyproject.toml")
 )
 
 image_base = _image_base
