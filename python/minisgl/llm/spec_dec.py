@@ -30,7 +30,7 @@ class SpecDecLLM(SpecDecScheduler):
     def __init__(self, model_path: str, dtype: torch.dtype = torch.bfloat16, **kwargs):
         config = SchedulerConfig(
             model_path=model_path,
-            tp_info=DistributedInfo(0, 1),
+            tp_info=DistributedInfo(rank=0, size=1),
             dtype=dtype,
             offline_mode=True,
             **kwargs,
