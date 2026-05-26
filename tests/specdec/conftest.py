@@ -32,8 +32,8 @@ def pytest_configure(config: pytest.Config) -> None:
 def _make_tiny_qwen3_config(
     num_layers: int = 2,
     hidden_size: int = 128,
-    num_attention_heads: int = 4,
-    head_dim: int = 32,
+    num_attention_heads: int = 2,
+    head_dim: int = 64,
     intermediate_size: int = 384,
     vocab_size: int = 32000,
     max_position: int = 256,
@@ -63,15 +63,67 @@ def _make_tiny_qwen3_config(
 def tiny_model_path() -> str:
     """Provide a path to a tiny Qwen3 config on disk (zero-download fixture).
 
-    Returns a temp directory containing a minimal ``config.json`` for a 2-layer,
-    hidden-128 Qwen3 variant. Combined with ``use_dummy_weight=True`` this yields
-    a tiny, instant-on-device target model for Tier 1 plumbing tests.
+    Returns a temp directory containing a minimal ``config.json``, tokenizer
+    config, and a small vocab for a 2-layer, hidden-128 Qwen3 variant.
+    Combined with ``use_dummy_weight=True`` this yields a tiny, instant-on-device
+    target model for Tier 1 plumbing tests.
     """
     config = _make_tiny_qwen3_config()
     tmpdir = tempfile.mkdtemp(prefix="tiny_qwen3_")
-    config_path = Path(tmpdir) / "config.json"
-    config_path.write_text(json.dumps(config))
+    root = Path(tmpdir)
+
+    root.joinpath("config.json").write_text(json.dumps(config))
+
+    tokenizer_config = {
+        "tokenizer_class": "Qwen2Tokenizer",
+        "add_prefix_space": False,
+        "model_max_length": 256,
+        "bos_token": None,
+        "eos_token": "<|endoftext|>",
+        "unk_token": "<|endoftext|>",
+        "pad_token": "<|endoftext|>",
+    }
+    root.joinpath("tokenizer_config.json").write_text(json.dumps(tokenizer_config))
+
+    vocab: dict[str, int] = {}
+    vocab["<|endoftext|>"] = 0
+    vocab["!"] = 1
+    for i in range(2, 32000):
+        vocab[chr(65 + i % 26) + str(i)] = i
+    merges: list[str] = []
+    with root.joinpath("vocab.json").open("w") as f:
+        json.dump(vocab, f, ensure_ascii=False)
+    root.joinpath("merges.txt").write_text("\n".join(merges) + "\n")
+
     return tmpdir
+
+
+@pytest.fixture(scope="session")
+def tiny_llm(tiny_model_path: str):
+    """Session-scoped tiny LLM for all Tier 1 GPU tests.
+
+    The engine asserts ``not cuda.is_initialized()``, so only ONE LLM can be
+    created per process. Session scope ensures all GPU test modules share it.
+    Skipped entirely when there is no CUDA device.
+    """
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            pytest.skip("no CUDA device")
+    except (ImportError, AssertionError):
+        pytest.skip("no CUDA device")
+
+    from minisgl.llm import LLM
+
+    llm = LLM(
+        model_path=tiny_model_path,
+        use_dummy_weight=True,
+        max_seq_len_override=128,
+        num_page_override=256,
+        cuda_graph_max_bs=0,
+    )
+    yield llm
+    llm.engine.shutdown()
 
 
 @pytest.fixture

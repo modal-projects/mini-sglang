@@ -18,7 +18,7 @@ _HERE = Path(__file__).resolve()
 _REPO = _HERE.parent.parent  # modal_tests/ -> repo root
 
 image = (
-    modal.Image.debian_slim(python_version="3.12")
+    modal.Image.from_registry("nvidia/cuda:12.8.0-devel-ubuntu22.04", add_python="3.12")
     .apt_install("libnuma1")  # sgl_kernel runtime dep
     .pip_install(
         "torch==2.9.1",
@@ -37,10 +37,10 @@ image = (
         {
             "HF_HUB_ENABLE_HF_TRANSFER": "1",
             "TOKENIZERS_PARALLELISM": "false",
-            "PYTHONPATH": "/app",  # resolves both `import minisgl` and `import image`
+            "PYTHONPATH": "/app",
         }
     )
-    .add_local_file(_HERE, "/app/image.py")  # ship this module so the container can import it
+    .add_local_file(_HERE, "/app/image.py")
     .add_local_dir(str(_REPO / "python" / "minisgl"), "/app/minisgl")
     .add_local_dir(str(_REPO / "tests"), "/app/tests")
     .add_local_file(str(_REPO / "pyproject.toml"), "/app/pyproject.toml")
