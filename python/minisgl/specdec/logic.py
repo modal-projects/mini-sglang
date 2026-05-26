@@ -11,12 +11,12 @@ engine, so ``pytest -m cpu`` stays GPU-free.
 
 from __future__ import annotations
 
-from typing import Sequence, Tuple
+from typing import List, Sequence, Tuple
 
 
 def verify_block(
-    draft_tokens: Sequence[int],  # length B: draft's guesses for verify positions 1..B
-    target_greedy: Sequence[int],  # length B+1: target argmax over the verify block
+    draft_tokens: Sequence[int],
+    target_greedy: Sequence[int],
 ) -> Tuple[int, int]:
     """Greedy acceptance rule for a verified draft block.
 
@@ -29,3 +29,57 @@ def verify_block(
       decoding emits at least one token per verify pass even when nothing is accepted.
     """
     raise NotImplementedError("Tier 0 seam: implement the greedy acceptance rule")
+
+
+def build_draft_block(
+    last_token: int,
+    block_size: int,
+    mask_id: int,
+) -> Tuple[List[int], List[int]]:
+    """Build a draft block for speculative decoding.
+
+    Returns ``(token_ids, position_ids)``:
+
+    * ``token_ids`` = ``[last_token] + [mask_id] * (block_size - 1)``
+    * ``position_ids`` is a contiguous range of ``block_size`` integers.
+    """
+    raise NotImplementedError("Tier 0 seam: implement draft block construction")
+
+
+def compute_keep_len(cached_len: int, accept_len: int) -> int:
+    """Compute the target KV cache length to keep after accepting *accept_len* tokens.
+
+    The KV cache is cropped to ``keep_len`` after the verify pass:
+    *keep_len = cached_len + accept_len + 1* (the +1 is the bonus token).
+    """
+    raise NotImplementedError("Tier 0 seam: implement rollback bookkeeping")
+
+
+def compute_rollback_state(
+    cached_len: int,
+    device_len: int,
+    accept_len: int,
+) -> Tuple[int, int, int]:
+    """Return the post-verify Req state as ``(new_cached_len, new_device_len, keep_len)``.
+
+    After accepting ``accept_len`` draft tokens + 1 bonus:
+    - ``keep_len`` (what stays in KV cache) = ``cached_len + accept_len + 1``
+    - ``new_cached_len`` = ``keep_len``
+    - ``new_device_len`` = ``keep_len``
+
+    All three are the same value for a standard step; kept distinct for clarity.
+    """
+    raise NotImplementedError("Tier 0 seam: implement rollback bookkeeping")
+
+
+def truncate_at_eos(
+    accepted_tokens: Sequence[int],
+    eos_token_id: int,
+) -> Tuple[List[int], bool]:
+    """Truncate an accepted span at the first EOS and report finished status.
+
+    Returns ``(truncated_tokens, finished)`` where ``truncated_tokens`` is
+    ``accepted_tokens`` up to (but not including) the first ``eos_token_id``, and
+    ``finished`` is True if an EOS was found.
+    """
+    raise NotImplementedError("Tier 0 seam: implement EOS truncation")
