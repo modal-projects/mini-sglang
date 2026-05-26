@@ -26,11 +26,6 @@ def test_seam_is_importable() -> None:
     assert callable(verify_block)
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    strict=True,
-    reason="skeleton: verify_block not implemented yet",
-)
 @pytest.mark.parametrize(
     "draft, target, expect",
     [

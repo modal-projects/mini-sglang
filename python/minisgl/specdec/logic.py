@@ -27,8 +27,15 @@ def verify_block(
     * ``bonus_token`` is ``target_greedy[accept_len]`` — the token the target itself
       would emit at the first divergence. It is always appended, which is why spec
       decoding emits at least one token per verify pass even when nothing is accepted.
+
+    ``target_greedy`` must be exactly one element longer than ``draft_tokens``
+    (the extra position supplies the bonus token at the first divergence).
     """
-    raise NotImplementedError("Tier 0 seam: implement the greedy acceptance rule")
+    for i, dt in enumerate(draft_tokens):
+        if dt != target_greedy[i]:
+            return i, target_greedy[i]
+    accept_len = len(draft_tokens)
+    return accept_len, target_greedy[accept_len]
 
 
 def build_draft_block(
@@ -43,7 +50,9 @@ def build_draft_block(
     * ``token_ids`` = ``[last_token] + [mask_id] * (block_size - 1)``
     * ``position_ids`` is a contiguous range of ``block_size`` integers.
     """
-    raise NotImplementedError("Tier 0 seam: implement draft block construction")
+    token_ids = [last_token] + [mask_id] * (block_size - 1)
+    positions = list(range(block_size))
+    return token_ids, positions
 
 
 def compute_keep_len(cached_len: int, accept_len: int) -> int:
@@ -52,7 +61,7 @@ def compute_keep_len(cached_len: int, accept_len: int) -> int:
     The KV cache is cropped to ``keep_len`` after the verify pass:
     *keep_len = cached_len + accept_len + 1* (the +1 is the bonus token).
     """
-    raise NotImplementedError("Tier 0 seam: implement rollback bookkeeping")
+    return cached_len + accept_len + 1
 
 
 def compute_rollback_state(
@@ -69,7 +78,8 @@ def compute_rollback_state(
 
     All three are the same value for a standard step; kept distinct for clarity.
     """
-    raise NotImplementedError("Tier 0 seam: implement rollback bookkeeping")
+    keep = cached_len + accept_len + 1
+    return keep, keep, keep
 
 
 def truncate_at_eos(
@@ -82,4 +92,7 @@ def truncate_at_eos(
     ``accepted_tokens`` up to (but not including) the first ``eos_token_id``, and
     ``finished`` is True if an EOS was found.
     """
-    raise NotImplementedError("Tier 0 seam: implement EOS truncation")
+    for i, t in enumerate(accepted_tokens):
+        if t == eos_token_id:
+            return list(accepted_tokens[:i]), True
+    return list(accepted_tokens), False

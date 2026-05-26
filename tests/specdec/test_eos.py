@@ -14,11 +14,6 @@ pytestmark = pytest.mark.cpu
 EOS_ID = 2
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    strict=True,
-    reason="skeleton: truncate_at_eos not implemented yet",
-)
 def test_no_eos_in_span() -> None:
     tokens = [10, 11, 12, 13]
     result, finished = truncate_at_eos(tokens, EOS_ID)
@@ -26,11 +21,6 @@ def test_no_eos_in_span() -> None:
     assert finished is False
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    strict=True,
-    reason="skeleton: truncate_at_eos not implemented yet",
-)
 def test_eos_at_start() -> None:
     tokens = [2, 11, 12, 13]
     result, finished = truncate_at_eos(tokens, EOS_ID)
@@ -38,11 +28,6 @@ def test_eos_at_start() -> None:
     assert finished is True
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    strict=True,
-    reason="skeleton: truncate_at_eos not implemented yet",
-)
 def test_eos_in_middle() -> None:
     tokens = [10, 11, 2, 13, 14]
     result, finished = truncate_at_eos(tokens, EOS_ID)
@@ -50,11 +35,6 @@ def test_eos_in_middle() -> None:
     assert finished is True
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    strict=True,
-    reason="skeleton: truncate_at_eos not implemented yet",
-)
 def test_eos_at_end() -> None:
     tokens = [10, 11, 12, 2]
     result, finished = truncate_at_eos(tokens, EOS_ID)
@@ -62,11 +42,6 @@ def test_eos_at_end() -> None:
     assert finished is True
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    strict=True,
-    reason="skeleton: truncate_at_eos not implemented yet",
-)
 def test_empty_span() -> None:
     tokens: list[int] = []
     result, finished = truncate_at_eos(tokens, EOS_ID)
