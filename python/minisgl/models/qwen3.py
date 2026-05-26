@@ -57,9 +57,15 @@ class Qwen3Model(BaseOP):
 
     def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
         x = self.embed_tokens.forward(input_ids)
+        ctx = get_global_ctx()
+        capture = ctx.capture_layers
+        if capture is not None:
+            ctx.captured_hidden_states.clear()
         residual: torch.Tensor | None = None
-        for layer in self.layers.op_list:
+        for i, layer in enumerate(self.layers.op_list):
             x, residual = layer.forward(x, residual)
+            if capture is not None and i in capture:
+                ctx.captured_hidden_states[i] = x
         return self.norm.forward(x, residual)[0]
 
 
