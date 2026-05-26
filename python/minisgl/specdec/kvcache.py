@@ -17,6 +17,7 @@ def crop_kv_cache(kv_buffer: torch.Tensor, keep_len: int) -> None:
 
     Args:
         kv_buffer: Shape ``(2, num_layers, num_pages, page_size, num_heads, head_dim)``.
+                   Index 0 = K cache, index 1 = V cache.
         keep_len: Number of token positions to retain.
     """
-    raise NotImplementedError("skeleton: crop_kv_cache not implemented yet")
+    kv_buffer[:, :, keep_len:] = 0

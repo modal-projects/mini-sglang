@@ -20,11 +20,6 @@ def _cuda_available() -> bool:
 pytestmark = [pytest.mark.gpu, pytest.mark.skipif(not _cuda_available(), reason="no CUDA device")]
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    strict=True,
-    reason="skeleton: KV crop not implemented yet",
-)
 def test_crop_preserves_head() -> None:
     import torch
     from minisgl.specdec.kvcache import crop_kv_cache
@@ -40,11 +35,6 @@ def test_crop_preserves_head() -> None:
     assert torch.equal(head_saved, head_after), "head should be unchanged"
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    strict=True,
-    reason="skeleton: KV crop not implemented yet",
-)
 def test_crop_zeros_tail() -> None:
     import torch
     from minisgl.specdec.kvcache import crop_kv_cache
@@ -58,11 +48,6 @@ def test_crop_zeros_tail() -> None:
     assert torch.all(tail == 0), f"tail should be zeroed, got mean={tail.abs().mean().item():.4f}"
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    strict=True,
-    reason="skeleton: KV crop not implemented yet",
-)
 def test_reuse_after_crop_no_leakage() -> None:
     import torch
     from minisgl.specdec.kvcache import crop_kv_cache
