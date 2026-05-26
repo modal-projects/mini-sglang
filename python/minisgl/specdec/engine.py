@@ -6,20 +6,15 @@ from typing import Dict, List
 
 import torch
 
-from minisgl.core import get_global_ctx
+from minisgl.core import Batch, Req, SamplingParams, get_global_ctx
 from minisgl.llm import LLM
 
 from .draft import DFlashDraftConfig, DFlashDraftModel
+from .logic import build_draft_block, compute_keep_len, verify_block
 
 
 class SpecDecLLM(LLM):
-    """LLM with DFlash speculative decoding.
-
-    Initializes the draft model and registers target hidden-state capture hooks
-    on the engine. The actual spec-dec loop is not yet implemented — generate()
-    delegates to the parent. Tests are marked xfail(NotImplementedError) until
-    the loop is wired.
-    """
+    """LLM with DFlash speculative decoding."""
 
     def __init__(
         self,
@@ -40,11 +35,11 @@ class SpecDecLLM(LLM):
         self.draft_model = DFlashDraftModel(draft_config).to(self.device).to(self.engine.dtype)
         self.draft_model.eval()
         self.ctx = get_global_ctx()
-        self.ctx.capture_layers = set(draft_config.effective_capture_layers())
+        self.capture_layer_set = set(draft_config.effective_capture_layers())
 
     def generate(
         self,
         prompts: List[str] | List[List[int]],
-        sampling_params: List | "SamplingParams",
+        sampling_params: List[SamplingParams] | SamplingParams,
     ) -> List[Dict[str, str | List[int]]]:
         raise NotImplementedError("skeleton: SpecDecLLM.generate not implemented yet")
