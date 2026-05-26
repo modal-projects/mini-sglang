@@ -30,67 +30,8 @@ def main():
     sys.path.insert(0, "/app")
     import torch
     from minisgl.core import SamplingParams
-    from minisgl.message import UserMsg
-    from minisgl.scheduler.config import SchedulerConfig
-    from minisgl.scheduler.spec_dec import SpecDecScheduler
-    from minisgl.distributed import DistributedInfo
+    from minisgl.llm.spec_dec import SpecDecLLM
     from transformers import AutoTokenizer
-
-    class SpecDecLLM(SpecDecScheduler):
-        def __init__(self, **kwargs):
-            config = SchedulerConfig(
-                tp_info=DistributedInfo(0, 1), dtype=torch.bfloat16,
-                offline_mode=True, **kwargs,
-            )
-            super().__init__(config)
-            self._p = []
-            self._status = {}
-            self._ctr = 0
-
-        def _load_tok(self):
-            if not hasattr(self, "_cached_tok"):
-                self._cached_tok = AutoTokenizer.from_pretrained(self.tokenizer.name_or_path)
-            return self._cached_tok
-
-        def _tokenize_one(self, prompt):
-            tok = self._load_tok()
-            if isinstance(prompt, str):
-                return tok.encode(prompt, return_tensors="pt").view(-1).to(torch.int32)
-            return torch.tensor(prompt, dtype=torch.int32)
-
-        def offline_receive_msg(self, blocking=False):
-            if blocking and not self._p:
-                raise type("Done", (Exception,), {})()
-            res = []
-            for prompt, sp in self._p:
-                ids = self._tokenize_one(prompt)
-                uid = self._ctr
-                self._ctr += 1
-                res.append(UserMsg(uid=uid, input_ids=ids, sampling_params=sp))
-                self._status[uid] = []
-            self._p = []
-            return res
-
-        def offline_send_result(self, reply):
-            for msg in reply:
-                if not (msg.finished and msg.next_token == self.eos_token_id):
-                    self._status[msg.uid].append(msg.next_token)
-
-        def generate(self, prompt, max_tokens=256):
-            self._p = [(prompt, SamplingParams(temperature=0.0, max_tokens=max_tokens))]
-            self._status = {}
-            self._ctr = 0
-            self._pending.clear()
-            self._hiddens.clear()
-            self._capture_enabled = False
-            self.engine.ctx.capture_hidden_layers = None
-            self.engine.ctx.captured_hidden_states = []
-            try:
-                self.run_forever()
-            except Exception as e:
-                if "Done" not in str(type(e).__name__):
-                    raise
-            return self._status[0]
 
     prompts = [
         "What is 2 + 2?",
@@ -109,7 +50,7 @@ def main():
         max_extend_tokens=128, cache_type="naive",
     )
     draft_model = llm._draft
-    tok = llm._load_tok()
+    tok = AutoTokenizer.from_pretrained(llm.tokenizer.name_or_path)
     print(f"  loaded in {time.time()-t0:.0f}s")
 
     for prompt in prompts:
@@ -119,17 +60,19 @@ def main():
 
         llm._draft = None
         t0 = time.perf_counter()
-        bas_ids = llm.generate(prompt, max_tokens=80)
+        bas_result = llm.generate([prompt], SamplingParams(temperature=0.0, max_tokens=80))
         bas_t = time.perf_counter() - t0
-        bas_text = tok.decode(bas_ids, skip_special_tokens=True)
+        bas_ids = bas_result[0]["token_ids"]
+        bas_text = bas_result[0]["text"]
         print(f"  Baseline ({bas_t:.2f}s, {len(bas_ids)} tok)")
         print(f"    {bas_text[:300]}")
 
         llm._draft = draft_model
         t0 = time.perf_counter()
-        spec_ids = llm.generate(prompt, max_tokens=80)
+        spec_result = llm.generate([prompt], SamplingParams(temperature=0.0, max_tokens=80))
         spec_t = time.perf_counter() - t0
-        spec_text = tok.decode(spec_ids, skip_special_tokens=True)
+        spec_ids = spec_result[0]["token_ids"]
+        spec_text = spec_result[0]["text"]
         speedup = bas_t / spec_t
         match = "✓" if bas_ids == spec_ids else "✗"
         print(f"  SpecDec  ({spec_t:.2f}s, {len(spec_ids)} tok, {speedup:.1f}x) match={match}")

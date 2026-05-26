@@ -36,111 +36,33 @@ def test_scheduler_specdec():
     sys.path.insert(0,"/app")
     import torch
     from minisgl.core import SamplingParams
-    from minisgl.scheduler.config import SchedulerConfig
-    from minisgl.scheduler.spec_dec import SpecDecScheduler
-    from minisgl.distributed import DistributedInfo
+    from minisgl.llm.spec_dec import SpecDecLLM
 
     print("=== Step 11: Scheduler-level SpecDec ===")
-
-    # Create a custom LLM-like class that extends SpecDecScheduler
-    from minisgl.message import BaseBackendMsg, DetokenizeMsg, UserMsg
-
-    class SpecDecLLM(SpecDecScheduler):
-        def __init__(self, model_path, draft_model_path, draft_block_size=16, **kwargs):
-            config = SchedulerConfig(
-                model_path=model_path,
-                tp_info=DistributedInfo(0, 1),
-                dtype=torch.bfloat16,
-                offline_mode=True,
-                draft_model_path=draft_model_path,
-                draft_block_size=draft_block_size,
-                **kwargs,
-            )
-            super().__init__(config)
-            self.pending_requests = []
-            self.status_map = {}
-            self.counter = 0
-
-        def _tokenize_one(self, prompt):
-            if isinstance(prompt, str):
-                return self.tokenizer.encode(prompt, return_tensors="pt").view(-1).to(torch.int32)
-            return torch.tensor(prompt, dtype=torch.int32, device="cpu")
-
-        def offline_receive_msg(self, blocking=False):
-            if blocking and len(self.pending_requests) == 0:
-                raise type("RequestAllFinished", (Exception,), {})()
-            results = []
-            added, sum_input_len = 0, 0
-            for tokens_or_prompt, sampling_params in self.pending_requests:
-                if sum_input_len >= self.prefill_budget:
-                    break
-                input_ids = self._tokenize_one(tokens_or_prompt)
-                sum_input_len += len(input_ids)
-                uid, added = self.counter + added, added + 1
-                results.append(UserMsg(uid=uid, input_ids=input_ids,
-                                       sampling_params=sampling_params))
-                self.status_map[uid] = type("Status", (), {
-                    "uid": uid, "output_ids": []
-                })()
-            self.counter += added
-            self.pending_requests = self.pending_requests[added:]
-            return results
-
-        def offline_send_result(self, reply):
-            for msg in reply:
-                status = self.status_map[msg.uid]
-                if not (msg.finished and msg.next_token == self.eos_token_id):
-                    status.output_ids.append(msg.next_token)
-
-        def generate(self, prompts, sampling_params):
-            self.pending_requests = []
-            self.status_map = {}
-            self.counter = 0
-            if isinstance(sampling_params, SamplingParams):
-                sampling_params = [sampling_params] * len(prompts)
-            for prompt, sp in zip(prompts, sampling_params):
-                self.pending_requests.append((prompt, sp))
-            try:
-                self.run_forever()
-            except Exception as e:
-                if "RequestAllFinished" not in str(type(e).__name__):
-                    import traceback
-                    print(f"  ERROR during run_forever: {e}")
-                    traceback.print_exc()
-                    raise
-            results = []
-            for i in range(len(prompts)):
-                status = self.status_map[i]
-                output_text = self.tokenizer.decode(status.output_ids)
-                results.append({"text": output_text, "token_ids": status.output_ids})
-            return results
-
-    class RequestAllFinished(Exception):
-        pass
 
     print("  Building SpecDecLLM...")
     t0 = time.time()
     llm = SpecDecLLM(
-        "Qwen/Qwen3-8B", draft_model_path="z-lab/Qwen3-8B-DFlash-b16",
-        draft_block_size=16, page_size=1, max_running_req=2, cuda_graph_max_bs=2,
-        max_extend_tokens=64,
+        model_path="Qwen/Qwen3-8B",
+        draft_model_path="z-lab/Qwen3-8B-DFlash-b16",
+        draft_block_size=16, cache_type="naive",
+        page_size=1, max_running_req=2, cuda_graph_max_bs=2,
     )
+    draft_model = llm._draft
     print(f"    built in {time.time()-t0:.0f}s")
 
     prompt = "What is 2 + 2?"
 
     print("  Baseline (no specdec)...")
-    old_draft = llm._draft
     llm._draft = None
     with torch.inference_mode():
         bas_result = llm.generate([prompt], SamplingParams(temperature=0.0, max_tokens=50))
     btok = bas_result[0]["token_ids"]
-    llm._draft = old_draft
     print(f"    {len(btok)} tokens")
     assert len(btok) > 0, "Baseline produced no tokens!"
 
     print("  SpecDec...")
-    llm._draft = old_draft
+    llm._draft = draft_model
     with torch.inference_mode():
         spec_result = llm.generate([prompt], SamplingParams(temperature=0.0, max_tokens=50))
     stok = spec_result[0]["token_ids"]
